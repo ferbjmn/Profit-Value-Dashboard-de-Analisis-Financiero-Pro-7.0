@@ -268,7 +268,7 @@ def main():
         st.header("📋 Resumen General")
 
         porcentaje_cols = [
-            "Dividend Yield %", "ROA", "ROE",
+            "Dividend Yield %", "ROA", "ROE", "Payout Ratio"
             "Oper Margin", "Profit Margin",
             "WACC", "ROIC", "EVA",
         ]
@@ -279,8 +279,8 @@ def main():
         cols_show = [
             "Ticker", "Nombre", "Sector", "Precio",
             "P/E", "P/B", "P/FCF",
-            "Dividend Yield %", "ROE",
-            "Debt/Eq", "Profit Margin",
+            "Dividend Yield %", "Payout Ratio", "ROA", "ROE",
+            "Current Ratio", "LtDebt/Eq", "Debt/Eq", "Oper Margin", "Profit Margin",
             "WACC", "ROIC",
         ]
         st.dataframe(df[cols_show].dropna(how="all", axis=1),
