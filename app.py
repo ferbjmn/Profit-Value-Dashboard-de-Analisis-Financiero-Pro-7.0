@@ -20,32 +20,62 @@ Rm = 0.085   # Retorno esperado del mercado
 Tc = 0.21    # Tasa impositiva corporativa
 
 # Funciones de cálculo
-def calcular_wacc(info, balance_sheet):
+def calcular_wacc_y_roic(ticker):
+    """
+    Calcula el WACC y el ROIC de una empresa usando únicamente datos de yfinance,
+    e incluye una evaluación de si la empresa está creando valor (Relación ROIC-WACC).
+    """
     try:
-        beta = info.get("beta", 1.0)
-        price = info.get("currentPrice")
-        shares = info.get("sharesOutstanding")
-        market_cap = price * shares if price and shares else None
+        empresa = yf.Ticker(ticker)
+        
+        # Pausa para evitar bloqueos de Yahoo Finance
+        time.sleep(1)  # Esperamos 1 segundo entre las solicitudes
+        
+        # Información básica
+        market_cap = empresa.info.get('marketCap', 0)  # Capitalización de mercado (valor de mercado del patrimonio)
+        beta = empresa.info.get('beta', 1)  # Beta de la empresa
+        rf = 0.02  # Tasa libre de riesgo (asumida como 2%)
+        equity_risk_premium = 0.05  # Prima de riesgo del mercado (asumida como 5%)
+        ke = rf + beta * equity_risk_premium  # Costo del capital accionario (CAPM)
+        
+        balance_general = empresa.balance_sheet
+        deuda_total = balance_general.loc['Total Debt'].iloc[0] if 'Total Debt' in balance_general.index else 0
+        efectivo = balance_general.loc['Cash And Cash Equivalents'].iloc[0] if 'Cash And Cash Equivalents' in balance_general.index else 0
+        patrimonio = balance_general.loc['Common Stock Equity'].iloc[0] if 'Common Stock Equity' in balance_general.index else 0
+        
+        estado_resultados = empresa.financials
+        gastos_intereses = estado_resultados.loc['Interest Expense'].iloc[0] if 'Interest Expense' in estado_resultados.index else 0
+        ebt = estado_resultados.loc['Ebt'].iloc[0] if 'Ebt' in estado_resultados.index else 0
+        impuestos = estado_resultados.loc['Income Tax Expense'].iloc[0] if 'Income Tax Expense' in estado_resultados.index else 0
+        ebit = estado_resultados.loc['EBIT'].iloc[0] if 'EBIT' in estado_resultados.index else 0
 
-        # Manejo de deuda
-        lt_debt = balance_sheet.loc["Long Term Debt"].iloc[0] if "Long Term Debt" in balance_sheet.index else 0
-        st_debt = balance_sheet.loc["Short Term Debt"].iloc[0] if "Short Term Debt" in balance_sheet.index else 0
-        total_debt = lt_debt + st_debt
+        # Pausa después de obtener datos financieros
+        time.sleep(1)
+        
+        # Calcular Kd (costo de la deuda)
+        kd = gastos_intereses / deuda_total if deuda_total != 0 else 0
 
-        Re = Rf + beta * (Rm - Rf)  # Costo de capital
-        Rd = 0.055 if total_debt > 0 else 0  # Costo de deuda
+        # Calcular tasa de impuestos efectiva
+        tasa_impuestos = impuestos / ebt if ebt != 0 else 0.21  # Asume 21% si no hay datos
+        
+        # Calcular WACC
+        total_capital = market_cap + deuda_total
+        wacc = ((market_cap / total_capital) * ke) + ((deuda_total / total_capital) * kd * (1 - tasa_impuestos))
+        
+        # Calcular ROIC
+        nopat = ebit * (1 - tasa_impuestos)  # NOPAT
+        capital_invertido = patrimonio + (deuda_total - efectivo)  # Capital Invertido
+        roic = nopat / capital_invertido if capital_invertido != 0 else 0
+        
+        # Calcular Relación ROIC-WACC
+        diferencia_roic_wacc = roic - wacc
+        creando_valor = roic > wacc  # Determina si está creando valor
 
-        E = market_cap  # Valor de mercado del equity
-        D = total_debt  # Valor de mercado de la deuda
-
-        if None in [Re, E, D] or E + D == 0:
-            return None, total_debt
-
-        wacc = (E / (E + D)) * Re + (D / (E + D)) * Rd * (1 - Tc)
-        return wacc, total_debt
+        return wacc, roic, diferencia_roic_wacc
+        
     except Exception as e:
-        st.error(f"Error calculando WACC: {str(e)}")
-        return None, None
+        st.error(f"Error al calcular WACC y ROIC para {ticker.upper()}: {e}")
+        return None, None, None
 
 
 def calcular_crecimiento_historico(financials, metric):
