@@ -26,15 +26,15 @@ def calcular_wacc(info, balance_sheet):
         price = info.get("currentPrice")
         shares = info.get("sharesOutstanding")
         market_cap = price * shares if price and shares else None
-        
+
         # Manejo de deuda
         lt_debt = balance_sheet.loc["Long Term Debt"].iloc[0] if "Long Term Debt" in balance_sheet.index else 0
         st_debt = balance_sheet.loc["Short Term Debt"].iloc[0] if "Short Term Debt" in balance_sheet.index else 0
         total_debt = lt_debt + st_debt
-        
+
         Re = Rf + beta * (Rm - Rf)  # Costo de capital
         Rd = 0.055 if total_debt > 0 else 0  # Costo de deuda
-        
+
         E = market_cap  # Valor de mercado del equity
         D = total_debt  # Valor de mercado de la deuda
 
@@ -47,26 +47,28 @@ def calcular_wacc(info, balance_sheet):
         st.error(f"Error calculando WACC: {str(e)}")
         return None, None
 
+
 def calcular_crecimiento_historico(financials, metric):
     try:
         if metric not in financials.index:
             return None
-            
+
         datos = financials.loc[metric].dropna().iloc[:4]  # Últimos 4 periodos
         if len(datos) < 2:
             return None
-            
+
         primer_valor = datos.iloc[-1]
         ultimo_valor = datos.iloc[0]
         años = len(datos) - 1
-        
+
         if primer_valor == 0:
             return None
-            
+
         cagr = (ultimo_valor / primer_valor) ** (1 / años) - 1
         return cagr
     except:
         return None
+
 
 def obtener_datos_financieros(ticker):
     try:
@@ -89,47 +91,46 @@ def obtener_datos_financieros(ticker):
         dividend = info.get("dividendRate")
         dividend_yield = info.get("dividendYield")
         payout = info.get("payoutRatio")
-        
+
         # Ratios de rentabilidad
         roa = info.get("returnOnAssets")
         roe = info.get("returnOnEquity")
-        
+
         # Ratios de liquidez
         current_ratio = info.get("currentRatio")
         quick_ratio = info.get("quickRatio")
-        
+
         # Ratios de deuda
         ltde = info.get("longTermDebtToEquity")
         de = info.get("debtToEquity")
-        
+
         # Margenes
         op_margin = info.get("operatingMargins")
         profit_margin = info.get("profitMargins")
-        
+
         # Flujo de caja
         fcf = cf.loc["Free Cash Flow"].iloc[0] if "Free Cash Flow" in cf.index else None
         shares = info.get("sharesOutstanding")
         pfcf = price / (fcf / shares) if fcf and shares else None
-        
+
         # Cálculos avanzados
         ebit = fin.loc["EBIT"].iloc[0] if "EBIT" in fin.index else None
         equity = bs.loc["Total Stockholder Equity"].iloc[0] if "Total Stockholder Equity" in bs.index else None
         wacc, total_debt = calcular_wacc(info, bs)
         capital_invertido = total_debt + equity if total_debt and equity else None
         roic = ebit * (1 - Tc) / capital_invertido if ebit and capital_invertido else None
-        eva = (roic - wacc) * capital_invertido if roic and wacc and capital_invertido else None
-        
+
         # Crecimientos
         revenue_growth = calcular_crecimiento_historico(fin, "Total Revenue")
         eps_growth = calcular_crecimiento_historico(fin, "Net Income")
         fcf_growth = calcular_crecimiento_historico(cf, "Free Cash Flow") or calcular_crecimiento_historico(cf, "Operating Cash Flow")
-        
+
         # Liquidez avanzada
         cash_ratio = info.get("cashRatio")
         operating_cash_flow = cf.loc["Operating Cash Flow"].iloc[0] if "Operating Cash Flow" in cf.index else None
         current_liabilities = bs.loc["Total Current Liabilities"].iloc[0] if "Total Current Liabilities" in bs.index else None
         cash_flow_ratio = operating_cash_flow / current_liabilities if operating_cash_flow and current_liabilities else None
-        
+
         return {
             "Ticker": ticker,
             "Nombre": name,
@@ -153,7 +154,6 @@ def obtener_datos_financieros(ticker):
             "Profit Margin": profit_margin,
             "WACC": wacc,
             "ROIC": roic,
-            "EVA": eva,
             "Deuda Total": total_debt,
             "Patrimonio Neto": equity,
             "Revenue Growth": revenue_growth,
@@ -167,66 +167,67 @@ def obtener_datos_financieros(ticker):
     except Exception as e:
         return {"Ticker": ticker, "Error": str(e)}
 
+
 # Interfaz de usuario
 def main():
     st.title("📊 Dashboard de Análisis Financiero Avanzado")
-    
+
     # Sidebar con configuración
     with st.sidebar:
         st.header("⚙️ Configuración")
         tickers_input = st.text_area(
-            "🔎 Ingresa tickers (separados por coma)", 
+            "🔎 Ingresa tickers (separados por coma)",
             "AAPL, MSFT, GOOGL, AMZN, TSLA",
             help="Ejemplo: AAPL, MSFT, GOOG"
         )
         max_tickers = st.slider("Número máximo de tickers", 1, 100, 50)
-        
+
         st.markdown("---")
         st.markdown("**Parámetros WACC**")
         global Rf, Rm, Tc
         Rf = st.number_input("Tasa libre de riesgo (%)", min_value=0.0, max_value=20.0, value=4.35) / 100
         Rm = st.number_input("Retorno esperado del mercado (%)", min_value=0.0, max_value=30.0, value=8.5) / 100
         Tc = st.number_input("Tasa impositiva corporativa (%)", min_value=0.0, max_value=50.0, value=21.0) / 100
-    
+
     # Procesamiento de tickers
     tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()][:max_tickers]
-    
+
     if st.button("🔍 Analizar Acciones", type="primary"):
         if not tickers:
             st.warning("Por favor ingresa al menos un ticker")
             return
-            
+
         resultados = {}
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
+
         # Procesamos los tickers en lotes de 10
         batch_size = 10
         for batch_start in range(0, len(tickers), batch_size):
             batch_end = min(batch_start + batch_size, len(tickers))
             batch_tickers = tickers[batch_start:batch_end]
-            
+
             for i, t in enumerate(batch_tickers):
                 status_text.text(f"⏳ Procesando {t} ({batch_start + i + 1}/{len(tickers)})...")
                 resultados[t] = obtener_datos_financieros(t)
                 progress_bar.progress((batch_start + i + 1) / len(tickers))
                 time.sleep(1)  # Para evitar bloqueos de la API
-            
+
         status_text.text("✅ Análisis completado!")
         time.sleep(0.5)
         status_text.empty()
         progress_bar.empty()
-        
+
         # Mostrar resultados
         if resultados:
             datos = list(resultados.values())
-            
+
             # Filtramos empresas con errores
             datos_validos = [d for d in datos if "Error" not in d]
             if not datos_validos:
                 st.error("No se pudo obtener datos válidos para ningún ticker")
                 return
-                
+
             df = pd.DataFrame(datos_validos)
             
             # Sección 1: Resumen General
