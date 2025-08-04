@@ -77,6 +77,7 @@ def calcular_wacc_y_roic(ticker):
         st.error(f"Error al calcular WACC y ROIC para {ticker.upper()}: {e}")
         return None, None, None
 
+
 def calcular_crecimiento_historico(financials, metric):
     try:
         if metric not in financials.index:
